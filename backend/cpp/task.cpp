@@ -2,6 +2,8 @@
 #include <cassert>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <iostream>
 
 struct File {
     int id;
@@ -16,22 +18,127 @@ struct File {
  * Task 1
  */
 std::vector<std::string> leafFiles(std::vector<File> files) {
-    return std::vector<std::string>();
+    std::unordered_map<int, bool> hasChild;
+    for (auto& file : files) {
+        // mark the parent as having a child
+        hasChild[file.parent] = true;
+    }
+
+    std::vector<std::string> leafFileNames;
+    for (auto& file: files) {
+        // if file does not have a child then it is a leaf node
+        if (!hasChild[file.id]) {
+            leafFileNames.push_back(file.name);
+        }
+    }
+
+    return leafFileNames;
 }
 
 /**
  * Task 2
  */
 std::vector<std::string> kLargestCategories(std::vector<File> files, int k) {
-    return std::vector<std::string>();
+    std::unordered_map<std::string, int> categoriesCounter;
+    // std::unordered_map<std::string, int> categoriesSize;
+    for (auto& file : files) {
+        for (auto& category : file.categories) {
+            categoriesCounter[category]++;
+            // categoriesSize[category] += file.size;
+        }
+    }
+    // move map into a vector with pair-elems
+    std::vector<std::pair<std::string, int>> categoriesVector(categoriesCounter.begin(), categoriesCounter.end());
+    // stable sort alphabetically (ascending)
+    std::stable_sort(categoriesVector.begin(), categoriesVector.end());
+    // stable sort by occurrances (decreasing)
+    std::stable_sort(categoriesVector.begin(), categoriesVector.end(), [](auto &left, auto &right) {
+        return left.second > right.second;
+    });
+
+    // move the first-k into the return list
+    std::vector<std::string> kLargestCategoriesNames(k);
+    int i = 0;
+    for (auto& elem : categoriesVector) {
+        if (i == k) break;
+        kLargestCategoriesNames[i] = elem.first;
+        i++;
+    }
+    return kLargestCategoriesNames;
 }
+
+
+
 
 /**
  * Task 3
  */
-int largestFileSize(std::vector<File> files) {
-    return 0;
+int calculateSize(std::unordered_map<int, std::vector<int>> fileChildren, std::unordered_map<int, int> singleFileSize, int node, std::unordered_map<int, int>& Cache) {
+    if (fileChildren[node].empty()) {
+        // std::cout << "leaf: " << node << '\n';
+        Cache[node] = singleFileSize[node];
+        return singleFileSize[node];
+    } else {
+        if (Cache[node]) {
+            return Cache[node];
+        } else {
+            int sum = 0;
+            for (auto& child : fileChildren[node]) {
+                sum += calculateSize(fileChildren, singleFileSize, child, Cache);
+            }
+            Cache[node] = sum;
+            return sum;
+        }
+    }
 }
+
+bool compare(const std::pair<int, int>& a, const std::pair<int, int>& b) {
+   return a.second < b.second;
+}
+
+int largestFileSize(std::vector<File> files) {
+    std::unordered_map<int, std::vector<int>> fileChildren;
+    std::unordered_map<int, int> singleFileSize;
+    for (auto& file : files) {
+        singleFileSize[file.id] = file.size;
+        if (file.parent == -1) {
+            continue;
+        }
+        fileChildren[file.parent].push_back(file.id);
+    }
+
+    // for (auto& elem : fileChildren) {
+    //     std::cout << elem.first << " has children ";
+    //     for (auto& v : elem.second) {
+    //         std::cout << v << " ";
+    //     } 
+    //     std::cout << '\n';
+    // }
+
+    std::unordered_map<int, int> Cache;
+    for (auto& file : files) {
+        if (file.parent == -1) {
+            for (auto& child : fileChildren[file.id]) {
+                // std::cout << "parent: " << file.id << " child: " << child << '\n';
+                Cache[file.id] += calculateSize(fileChildren, singleFileSize, child, Cache);
+            }
+        }
+    }
+    for (auto& file : files) {
+        if (!Cache[file.id]) {
+            Cache[file.id] = file.size;
+        }
+    }
+
+    // for (auto& elem : Cache) {
+    //     std::cout << elem.first << " " << elem.second << '\n';
+    // }
+
+    int max = max_element(Cache.begin(), Cache.end(), compare)->second;
+    return max;
+}
+
+
 
 int main(void) {
     std::vector<File> testFiles{
